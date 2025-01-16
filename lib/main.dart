@@ -2,36 +2,50 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: MyHomePage(),
+      title: 'SMS Reader',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: const MyHomePage(),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key});
+
   @override
-  _MyHomePageState createState() => _MyHomePageState();
+  State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
   static const platform = MethodChannel('smsPlatform');
-  String _smsData = 'No data';
+  List<String> smsMessages = [];
 
   Future<void> _getSmsData() async {
     try {
-      final String result = await platform.invokeMethod('readAllSms');
-      setState(() {
-        _smsData = result;
-      });
+      final result = await platform.invokeMethod<List<Object?>>('readAllSms');
+      if (result != null) {
+        setState(() {
+          smsMessages = result.cast<String>();
+        });
+      }
     } on PlatformException catch (e) {
       setState(() {
-        _smsData = "Failed to get SMS data: '${e.message}'.";
+        smsMessages = ['Failed to get SMS: ${e.message}'];
+      });
+    } catch (e) {
+      setState(() {
+        smsMessages = ['Error: $e'];
       });
     }
   }
@@ -39,23 +53,26 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("SMS Reader")),
-      body: SingleChildScrollView(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Text(_smsData),
-                ElevatedButton(
-                  onPressed: _getSmsData,
-                  child: Text('Get SMS Data'),
-                ),
-              ],
+      appBar: AppBar(
+        title: const Text('SMS Reader'),
+      ),
+      body: Column(
+        children: [
+          ElevatedButton(
+            onPressed: _getSmsData,
+            child: const Text('Read SMS'),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: smsMessages.length,
+              itemBuilder: (context, index) {
+                return ListTile(
+                  title: Text(smsMessages[index]),
+                );
+              },
             ),
           ),
-        ),
+        ],
       ),
     );
   }
