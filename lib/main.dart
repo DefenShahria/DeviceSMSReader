@@ -29,23 +29,38 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   static const platform = MethodChannel('smsPlatform');
-  List<String> smsMessages = [];
+  List<String> displayedMessages = []; // SMS messages currently shown
+  List<String> newMessages = []; // New messages not yet shown
 
   Future<void> _getSmsData() async {
     try {
       final result = await platform.invokeMethod<List<Object?>>('readAllSms');
       if (result != null) {
-        setState(() {
-          smsMessages = result.cast<String>();
-        });
+        // Filter messages where the contact name is "DFNInternet"
+        final filteredMessages = result.cast<String>().where((message) {
+          return message.contains("DFNInternet");
+        }).toList();
+
+        // Identify new messages
+        final fetchedNewMessages = filteredMessages
+            .where((message) => !displayedMessages.contains(message))
+            .toList();
+
+        if (fetchedNewMessages.isNotEmpty) {
+          setState(() {
+            // Add new messages to the displayed list
+            newMessages = fetchedNewMessages;
+            displayedMessages.addAll(fetchedNewMessages);
+          });
+        }
       }
     } on PlatformException catch (e) {
       setState(() {
-        smsMessages = ['Failed to get SMS: ${e.message}'];
+        newMessages = ['Failed to get SMS: ${e.message}'];
       });
     } catch (e) {
       setState(() {
-        smsMessages = ['Error: $e'];
+        newMessages = ['Error: $e'];
       });
     }
   }
@@ -62,12 +77,20 @@ class _MyHomePageState extends State<MyHomePage> {
             onPressed: _getSmsData,
             child: const Text('Read SMS'),
           ),
+          if (newMessages.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                'New SMS: ${newMessages.length}',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
           Expanded(
             child: ListView.builder(
-              itemCount: smsMessages.length,
+              itemCount: newMessages.length,
               itemBuilder: (context, index) {
                 return ListTile(
-                  title: Text(smsMessages[index]),
+                  title: Text(newMessages[index]),
                 );
               },
             ),
