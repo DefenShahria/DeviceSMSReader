@@ -49,9 +49,12 @@ class MainActivity : FlutterActivity() {
             smsList.clear()
             if (cursor != null && cursor.moveToFirst()) {
                 do {
-                    val address = cursor.getString(cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS))
+                    val address =
+                        cursor.getString(cursor.getColumnIndexOrThrow(Telephony.Sms.ADDRESS))
                     val body = cursor.getString(cursor.getColumnIndexOrThrow(Telephony.Sms.BODY))
-                    smsList.add("Sender: $address\nMessage: $body")
+                    if (address.contains("DFNInternet", ignoreCase = true)) {
+                        smsList.add("Sender: $address\nMessage: $body")
+                    }
                 } while (cursor.moveToNext())
             }
             cursor?.close()

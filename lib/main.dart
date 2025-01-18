@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -11,6 +12,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'SMS Reader',
       theme: ThemeData(
         primarySwatch: Colors.blue,
@@ -29,40 +31,60 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   static const platform = MethodChannel('smsPlatform');
-  List<String> displayedMessages = []; // SMS messages currently shown
-  List<String> newMessages = []; // New messages not yet shown
+  List<String> displayedMessages = [];
+  Set<String> seenMessages = {}; // Set to keep track of shown messages
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startPeriodicSmsCheck();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
   Future<void> _getSmsData() async {
     try {
       final result = await platform.invokeMethod<List<Object?>>('readAllSms');
       if (result != null) {
-        // Filter messages where the contact name is "DFNInternet"
         final filteredMessages = result.cast<String>().where((message) {
           return message.contains("DFNInternet");
         }).toList();
 
-        // Identify new messages
-        final fetchedNewMessages = filteredMessages
-            .where((message) => !displayedMessages.contains(message))
-            .toList();
+        final newMessages = filteredMessages.where((message) {
+          return !seenMessages.contains(message);
+        }).toList();
 
-        if (fetchedNewMessages.isNotEmpty) {
+        if (newMessages.isNotEmpty) {
           setState(() {
-            // Add new messages to the displayed list
-            newMessages = fetchedNewMessages;
-            displayedMessages.addAll(fetchedNewMessages);
+            displayedMessages.insertAll(0, newMessages);
+            seenMessages.addAll(newMessages);
           });
+
+          for (var message in newMessages) {
+            debugPrint('New Message: $message');
+          }
         }
       }
     } on PlatformException catch (e) {
       setState(() {
-        newMessages = ['Failed to get SMS: ${e.message}'];
+        displayedMessages = ['Failed to get SMS: ${e.message}'];
       });
     } catch (e) {
       setState(() {
-        newMessages = ['Error: $e'];
+        displayedMessages = ['Error: $e'];
       });
     }
+  }
+
+  void _startPeriodicSmsCheck() {
+    _timer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      _getSmsData();
+    });
   }
 
   @override
@@ -73,28 +95,22 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       body: Column(
         children: [
-          ElevatedButton(
-            onPressed: _getSmsData,
-            child: const Text('Read SMS'),
+          Text(
+            'New Messages: ${displayedMessages.length}',
+            style: const TextStyle(
+                color: Colors.green, fontSize: 22, fontWeight: FontWeight.w400),
           ),
-          if (newMessages.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Text(
-                'New SMS: ${newMessages.length}',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          if (displayedMessages.isNotEmpty)
+            Expanded(
+              child: ListView.builder(
+                itemCount: displayedMessages.length,
+                itemBuilder: (context, index) {
+                  return ListTile(
+                    title: Text(displayedMessages[index]),
+                  );
+                },
               ),
             ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: newMessages.length,
-              itemBuilder: (context, index) {
-                return ListTile(
-                  title: Text(newMessages[index]),
-                );
-              },
-            ),
-          ),
         ],
       ),
     );
