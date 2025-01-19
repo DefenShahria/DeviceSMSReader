@@ -31,15 +31,14 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   static const platform = MethodChannel('smsPlatform');
-  List<String> displayedMessages = [];
-  Set<String> seenMessages = {};
+  int totalMessages = 0; // Total messages in the first step
+  String? latestMessage; // Holds the most recent new message
   Timer? _timer;
-  bool hasInitialized = false; // Flag to track the initial run
 
   @override
   void initState() {
     super.initState();
-    _startPeriodicSmsCheck();
+    _initializeMessageCount();
   }
 
   @override
@@ -48,7 +47,30 @@ class _MyHomePageState extends State<MyHomePage> {
     super.dispose();
   }
 
-  Future<void> _getSmsData() async {
+  Future<void> _initializeMessageCount() async {
+    try {
+      final result = await platform.invokeMethod<List<Object?>>('readAllSms');
+      if (result != null) {
+        final filteredMessages = result.cast<String>().where((message) {
+          return message.contains("DFNInternet");
+        }).toList();
+        // Save the total count of initial messages
+        totalMessages = filteredMessages.length;
+        // Start periodic checks after initialization
+        _startPeriodicSmsCheck();
+      }
+    } on PlatformException catch (e) {
+      setState(() {
+        latestMessage = 'Failed to get SMS: ${e.message}';
+      });
+    } catch (e) {
+      setState(() {
+        latestMessage = 'Error: $e';
+      });
+    }
+  }
+
+  Future<void> _checkForNewMessages() async {
     try {
       final result = await platform.invokeMethod<List<Object?>>('readAllSms');
       if (result != null) {
@@ -56,44 +78,33 @@ class _MyHomePageState extends State<MyHomePage> {
           return message.contains("DFNInternet");
         }).toList();
 
-        final newMessages = filteredMessages.where((message) {
-          return !seenMessages.contains(message);
-        }).toList();
-
-        if (newMessages.isNotEmpty) {
+        // Check if the number of messages has increased
+        if (filteredMessages.length > totalMessages) {
           setState(() {
-            // Only add new messages if the app has initialized
-            if (hasInitialized) {
-              displayedMessages.insertAll(0, newMessages);
-            }
-            seenMessages.addAll(newMessages);
+            latestMessage = filteredMessages.first; // Get the newest message
           });
 
-          // Print new messages for debugging
-          for (var message in newMessages) {
-            debugPrint('New Message: $message');
-          }
-        }
-      }
+          // Update the total message count
+          totalMessages = filteredMessages.length;
 
-      // Mark as initialized after the first run
-      if (!hasInitialized) {
-        hasInitialized = true;
+          // Print for debugging
+          debugPrint('New Message: $latestMessage');
+        }
       }
     } on PlatformException catch (e) {
       setState(() {
-        displayedMessages = ['Failed to get SMS: ${e.message}'];
+        latestMessage = 'Failed to get SMS: ${e.message}';
       });
     } catch (e) {
       setState(() {
-        displayedMessages = ['Error: $e'];
+        latestMessage = 'Error: $e';
       });
     }
   }
 
   void _startPeriodicSmsCheck() {
     _timer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      _getSmsData();
+      _checkForNewMessages();
     });
   }
 
@@ -105,22 +116,23 @@ class _MyHomePageState extends State<MyHomePage> {
       ),
       body: Column(
         children: [
-          Text(
-            'New Messages: ${displayedMessages.length}',
-            style: const TextStyle(
-                color: Colors.green, fontSize: 22, fontWeight: FontWeight.w400),
-          ),
-          if (displayedMessages.isNotEmpty)
-            Expanded(
-              child: ListView.builder(
-                itemCount: displayedMessages.length,
-                itemBuilder: (context, index) {
-                  return ListTile(
-                    title: Text(displayedMessages[index]),
-                  );
-                },
-              ),
+          Center(
+            child: latestMessage != null
+                ? Text(
+              latestMessage!,
+              style: const TextStyle(
+                  color: Colors.green,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w400),
+            )
+                : const Text(
+              'No new messages',
+              style: TextStyle(fontSize: 18, color: Colors.grey),
             ),
+          ),
+          ElevatedButton(onPressed: (){
+            print(latestMessage);
+          }, child: Text("Print latest msg data"))
         ],
       ),
     );
