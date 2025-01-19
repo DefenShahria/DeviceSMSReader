@@ -32,8 +32,9 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   static const platform = MethodChannel('smsPlatform');
   List<String> displayedMessages = [];
-  Set<String> seenMessages = {}; // Set to keep track of shown messages
+  Set<String> seenMessages = {};
   Timer? _timer;
+  bool hasInitialized = false; // Flag to track the initial run
 
   @override
   void initState() {
@@ -61,14 +62,23 @@ class _MyHomePageState extends State<MyHomePage> {
 
         if (newMessages.isNotEmpty) {
           setState(() {
-            displayedMessages.insertAll(0, newMessages);
+            // Only add new messages if the app has initialized
+            if (hasInitialized) {
+              displayedMessages.insertAll(0, newMessages);
+            }
             seenMessages.addAll(newMessages);
           });
 
+          // Print new messages for debugging
           for (var message in newMessages) {
             debugPrint('New Message: $message');
           }
         }
+      }
+
+      // Mark as initialized after the first run
+      if (!hasInitialized) {
+        hasInitialized = true;
       }
     } on PlatformException catch (e) {
       setState(() {
